@@ -154,7 +154,7 @@ def strip_jupyter(
     if failed_cells:
         err_msg = f"\nFailed to format {failed_cells} cells in notebook"
         if filename:
-            err_msg += (f" {filename}",)
+            err_msg += f" {filename}"
         print(err_msg, file=sys.stderr)
     return nb
 
@@ -238,7 +238,9 @@ def install(gitattrs=None):
     except CalledProcessError:
         print('Installation failed: not a git repository!', file=sys.stderr)
         sys.exit(1)
-    filepath = "'{}' -m nbcleanse filter".format(sys.executable.replace('\\', '/'))
+    filepath = "'{}' '{}' filter".format(
+        sys.executable.replace('\\', '/'), path.abspath(__file__)
+    )
     check_call(['git', 'config', 'filter.nbcleanse.clean', filepath])
     check_call(['git', 'config', 'filter.nbcleanse.smudge', 'cat'])
     check_call(['git', 'config', 'diff.ipynb.textconv', filepath + ' -t'])
