@@ -358,23 +358,27 @@ def _install(gitattrs=None, conda_env=None, autoupdate=None):
     except CalledProcessError:
         print("Installation failed: not a git repository!", file=sys.stderr)
         sys.exit(1)
-    if conda_env:
-        if not os.environ["CONDA_EXE"]:
-            click.secho(
-                "$CONDA_EXE not set, cannot install with --conda set",
-                err=True,
-                bold=True,
-            )
-            sys.exit(1)
-        filter_command = [
-            "'{}'".format(path_to_posix(os.environ["CONDA_EXE"])),
-            "run",
-            "-n",
-            f"'{conda_env}'",
-            "python",
-        ]
-    else:
-        filter_command = ["'{}'".format(path_to_posix(sys.executable))]
+    # if conda_env:
+    #     if not os.environ["CONDA_EXE"]:
+    #         click.secho(
+    #             "$CONDA_EXE not set, cannot install with --conda set",
+    #             err=True,
+    #             bold=True,
+    #         )
+    #         sys.exit(1)
+    #     filter_command = [
+    #         "'{}'".format(path_to_posix(os.environ["CONDA_EXE"])),
+    #         "run",
+    #         "-n",
+    #         f"'{conda_env}'",
+    #         "python",
+    #     ]
+    # else:
+    #     filter_command = ["'{}'".format(path_to_posix(sys.executable))]
+    # TODO: above code doesn't work because conda run doesn't stream output
+    # SEE: https://github.com/conda/conda/pull/9576
+    # so instead we just use current python executable (we do not set PATH or conda env vars)
+    filter_command = ["'{}'".format(path_to_posix(sys.executable))]
     filter_command.extend(["'{}'".format(Path(__file__).resolve()), "filter"])
     if gitattrs:
         filter_command.extend(["--gitattrs", f"'{gitattrs}'"])
@@ -543,7 +547,7 @@ def filter(
     files, textconv, keep_count, keep_output, strip_key, gitattrs, conda_env, autoupdate
 ):
     git_pull_if_needed(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
-    # https://stackoverflow.com/a/16549381
+    # SEE: https://stackoverflow.com/a/16549381
     if sys.stdin:
         sys.stdin.reconfigure(encoding="utf-8")
         if not files:
@@ -570,11 +574,7 @@ def filter(
                 out_file.flush()
             else:
                 out_file.truncate()
-        # except nbformat.NotJSONError:
-        #     print(f"Not a valid notebook: '{file.name}'", file=sys.stderr)
-        #     sys.exit(1)
         except Exception:
-            # Ignore exceptions for non-notebook files.
             print(f"Could not strip '{file.name}'", file=sys.stderr)
             raise
 
