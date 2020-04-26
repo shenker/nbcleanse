@@ -153,7 +153,7 @@ def blacken(contents, format_docstrings=True):
 def filter_py(contents, filename):
     new_contents = blacken(contents.decode())
     if new_contents is None:
-        print(f"\nUnable to format {filename}")
+        click.echo(f"\nUnable to format {filename}")
         return None
     return new_contents.encode()
 
@@ -206,7 +206,7 @@ def strip_jupyter(
         elif key.startswith("cell.metadata."):
             keys["cell"]["metadata"].append(key[len("cell.metadata.") :])
         else:
-            print(f"ignoring extra key {key}", file=sys.stderr)
+            click.echo(f"ignoring extra key {key}", err=True)
     for field in keys["metadata"]:
         pop_recursive(nb.metadata, field)
     failed_cells = 0
@@ -254,7 +254,7 @@ def strip_jupyter(
         err_msg = f"\nFailed to format {failed_cells} cells in notebook"
         if filename:
             err_msg += f" {filename}"
-        print(err_msg, file=sys.stderr)
+        click.echo(err_msg, err=True)
     return nb
 
 
@@ -262,7 +262,7 @@ def filter_jupyter(contents, filename):
     try:
         nb = nbformat.reads(contents.decode(), nbformat.NO_CONVERT)
     except:
-        print(f"\nUnable to parse notebook {filename}")
+        click.echo(f"\nUnable to parse notebook {filename}", err=True)
         return None
     nb = strip_jupyter(nb, filename=filename)
     new_contents = nbformat.writes(nb) + "\n"
@@ -353,10 +353,10 @@ def _install(gitattrs=None, conda_env=None, autoupdate=None):
             check=True,
         ).stdout.strip()
     except (WindowsError if name == "nt" else OSError):
-        print("Installation failed: git is not on path!", file=sys.stderr)
+        click.secho("Installation failed: git is not on path!", err=True, bold=True)
         sys.exit(1)
     except CalledProcessError:
-        print("Installation failed: not a git repository!", file=sys.stderr)
+        click.secho("Installation failed: not a git repository!", err=True, bold=True)
         sys.exit(1)
     # if conda_env:
     #     if not os.environ["CONDA_EXE"]:
@@ -440,7 +440,7 @@ def uninstall(gitattrs):
             check=True,
         ).stdout.strip()
     except CalledProcessError:
-        print("Installation failed: not a git repository!", file=sys.stderr)
+        click.secho("Installation failed: not a git repository!", err=True, bold=True)
         sys.exit(1)
     commands = [
         ["git", "config", "--unset", "filter.nbcleanse.clean"],
@@ -486,22 +486,21 @@ def status():
         )
         info["git_dir"] = os.path.dirname(os.path.abspath(res.stdout.strip()))
     except:
-        print("not in a git repository!", file=sys.stderr)
+        click.secho("not in a git repository!", err=True, bold=True)
         sys.exit(1)
+    not_installed = False
     try:
         for key, args in commands.items():
             res = subprocess.run(args, text=True, capture_output=True, check=True)
             info[key] = res.stdout.strip()
     except CalledProcessError:
-        if "git_dir" in info:
-            print("nbcleanse is not installed in repository {git_dir}".format(**info))
-        else:
-            print("could not find git repository", file=sys.stderr)
-        sys.exit(1)
+        not_installed = True
     if info["attributes"].endswith("unspecified"):
-        print("nbcleanse is not installed in repository {git_dir}".format(**info))
+        not_installed = True
+    if not_installed:
+        click.echo("nbcleanse is not installed in repository {git_dir}".format(**info))
         sys.exit(1)
-    print(
+    click.echo(
         dedent(
             """\
         nbcleanse is installed in repository {git_dir}
@@ -575,7 +574,7 @@ def filter(
             else:
                 out_file.truncate()
         except Exception:
-            print(f"Could not strip '{file.name}'", file=sys.stderr)
+            click.echo(f"Could not strip '{file.name}'", err=True)
             raise
 
 
