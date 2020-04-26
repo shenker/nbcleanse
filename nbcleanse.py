@@ -537,7 +537,9 @@ def status():
 @conda_option
 @autoupdate_option
 @click.argument("files", type=click.File("r", lazy=True), nargs=-1)
-def filter(files, textconv, keep_count, keep_output, strip_key, conda_env, autoupdate):
+def filter(
+    files, textconv, keep_count, keep_output, strip_key, gitattrs, conda_env, autoupdate
+):
     git_pull_if_needed(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
     # https://stackoverflow.com/a/16549381
     if sys.stdin:
