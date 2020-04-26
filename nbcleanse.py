@@ -312,9 +312,8 @@ conda_option = click.option(
     "--conda", "conda_env", default=None, help="Name of conda environment to run in"
 )
 autoupdate_option = click.option(
-    "--autoupdate",
+    "--autoupdate/--no-autoupdate",
     default=True,
-    is_flag=True,
     help="Whether to update nbcleanse automatically",
 )
 
