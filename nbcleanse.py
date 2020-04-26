@@ -14,15 +14,15 @@ nbcleanse install/uninstall/status/filter modified from nbstripout (https://gith
 import subprocess
 import sys
 import re
-import json
+from functools import partial
 from textwrap import dedent
 import click
 import nbformat
 import black
+import docformatter
 import cachetools
 
 blobs_handled = {}
-cat_file_process = None
 black_cache = cachetools.LRUCache(maxsize=10_000_000, getsizeof=sys.getsizeof)
 
 
@@ -32,8 +32,12 @@ def cli():
 
 
 @cachetools.cached(black_cache)
-def blacken(contents):
+def blacken(contents, format_docstrings=True):
     try:
+        if format_docstrings:
+            new_contents = docformatter.format_code(
+                contents, summary_wrap_length=79, description_wrap_length=72
+            )
         new_contents = black.format_file_contents(
             contents,
             fast=True,
@@ -92,8 +96,7 @@ def _cells(nb):
 def strip_jupyter(
     nb, keep_output=False, keep_count=False, extra_keys=(), filename=None
 ):
-    """
-    Strip the outputs, execution count/prompt number and miscellaneous
+    """Strip the outputs, execution count/prompt number and miscellaneous
     metadata from a notebook object, unless specified to keep either the outputs
     or counts.
     `extra_keys` could be `('metadata.foo', 'cell.metadata.bar', 'metadata.baz')`
@@ -162,20 +165,20 @@ def strip_jupyter(
 def filter_jupyter(contents, filename):
     try:
         nb = nbformat.reads(contents.decode(), nbformat.NO_CONVERT)
-        # nb = json.loads(contents.decode())
     except:
         print(f"\nUnable to parse notebook {filename}")
         return None
     nb = strip_jupyter(nb, filename=filename)
     new_contents = nbformat.writes(nb) + "\n"
-    # new_contents = json.dumps(nb, indent=1, sort_keys=True, ensure_ascii=False)
     return new_contents.encode()
 
 
 filetype_filters = {"py": filter_py, "ipynb": filter_jupyter}
 
 
-def filter_commit(commit, metadata):
+def filter_commit(commit, metadata, cat_file_process=None, repo_filter=None):
+    import git_filter_repo as fr
+
     for change in commit.file_changes:
         filename = change.filename.decode()
         extension = filename.split(".")[-1].lower()
@@ -208,7 +211,12 @@ def filter_commit(commit, metadata):
             change.blob_id = blob.id
 
 
-@click.command()
+@click.group()
+def cli():
+    pass
+
+
+@cli.command()
 def filter_repo():
     import git_filter_repo as fr
 
@@ -217,7 +225,10 @@ def filter_repo():
     cat_file_process = subprocess.Popen(
         ["git", "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE
     )
-    repo_filter = fr.RepoFilter(args, commit_callback=filter_commit)
+    repo_filter = fr.RepoFilter(args)
+    repo_filter._commit_callback = partial(
+        filter_commit, cat_file_process=cat_file_process, repo_filter=repo_filter
+    )
     repo_filter.run()
     cat_file_process.stdin.close()
     cat_file_process.wait()
@@ -405,7 +416,7 @@ def filter(files, textconv, keep_count, keep_output, strip_key):
         try:
             nb = nbformat.read(file, as_version=nbformat.NO_CONVERT)
             nb = strip_jupyter(
-                nb, keep_output, keep_count, strip_key, filename=file.name
+                nb, keep_output, keep_count, extra_keys=strip_key, filename=file.name
             )
             if not textconv:
                 out_file.seek(0)

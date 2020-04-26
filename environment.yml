@@ -1,0 +1,13 @@
+name: nbcleanse
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - black
+  - cachetools
+  - click
+  - nbformat
+  - pip
+  - pip:
+    - docformatter
+  - pre-commit
