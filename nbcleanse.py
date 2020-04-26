@@ -95,7 +95,9 @@ def is_update_needed():
     return not last_updated or now - last_updated >= UPDATE_INTERVAL
 
 
-def git_pull_if_needed(conda_env=None):
+def git_pull_if_needed(gitattrs=None, conda_env=None, autoupdate=None):
+    if not autoupdate:
+        return
     if not is_update_needed():
         return
     pulled = is_git_pull_needed()
@@ -118,7 +120,7 @@ def git_pull_if_needed(conda_env=None):
                 check=True,
             )
         click.secho("reinstalling nbcleanse...", err=True, bold=True)
-        _install(conda_env=conda_env)
+        _install(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
     now = time.time()
     with open(TIMESTAMP_FILE, "w") as f:
         f.write(f"{now}\n")
