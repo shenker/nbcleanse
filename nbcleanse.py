@@ -12,10 +12,12 @@ nbcleanse install/uninstall/status/filter modified from nbstripout (https://gith
 """
 
 import subprocess
-from subprocess import check_output, CalledProcessError
+from subprocess import CalledProcessError, STDOUT, DEVNULL
+from pathlib import Path, PurePath
 import sys
 import os
 import re
+import time
 from functools import partial
 from textwrap import dedent
 import click
@@ -24,10 +26,16 @@ import black
 import docformatter
 import cachetools
 
-PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = Path(__file__).resolve().parent
+TIMESTAMP_FILE = PARENT_DIR / ".last_updated"
+UPDATE_INTERVAL = 5 * 60  # seconds
 
 blobs_handled = {}
 black_cache = cachetools.LRUCache(maxsize=10_000_000, getsizeof=sys.getsizeof)
+
+
+def path_to_posix(path):
+    return str(PurePath(path).as_posix())
 
 
 def is_git_pull_needed():
@@ -76,23 +84,45 @@ def is_git_pull_needed():
         click.secho("please try updating nbcleanse manually", err=True, bold=True)
 
 
-def git_pull_if_needed():
-    if not is_git_pull_needed():
+def is_update_needed():
+    last_updated = None
+    try:
+        if TIMESTAMP_FILE.exists():
+            last_updated = float(TIMESTAMP_FILE.read_text())
+    except:
+        pass
+    now = time.time()
+    return not last_updated or now - last_updated >= UPDATE_INTERVAL
+
+
+def git_pull_if_needed(conda_env=None):
+    if not is_update_needed():
         return
-    click.secho("nbcleanse update available, running git pull...", err=True, bold=True)
-    # subprocess.run(["git", "pull"], cwd=PARENT_DIR, check=True)
-    click.secho(
-        "updating nbcleanse conda environment (if necessary)...", err=True, bold=True
-    )
-    conda_env_name = "nbcleanse"
-    envyml = os.path.join(PARENT_DIR, "environment.yml")
-    subprocess.run(
-        ["conda", "env", "update", "--prune", "-n", conda_env_name, "-f", envyml],
-        cwd=PARENT_DIR,
-        check=True,
-    )
-    click.secho("reinstalling nbcleanse...", err=True, bold=True)
-    _install()
+    pulled = is_git_pull_needed()
+    if pulled:
+        click.secho(
+            "nbcleanse update available, running git pull...", err=True, bold=True
+        )
+        subprocess.run(["git", "pull"], cwd=PARENT_DIR, check=True)
+        if conda_env:
+            click.echo(
+                click.style("updating nbcleanse conda environment '", bold=True)
+                + conda_env
+                + click.style("' (if necessary)...", bold=True),
+                err=True,
+            )
+            envyml = PARENT_DIR / "environment.yml"
+            subprocess.run(
+                ["conda", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
+                cwd=PARENT_DIR,
+                check=True,
+            )
+        click.secho("reinstalling nbcleanse...", err=True, bold=True)
+        _install(conda_env=conda_env)
+    now = time.time()
+    with open(TIMESTAMP_FILE, "w") as f:
+        f.write(f"{now}\n")
+    return pulled
 
 
 @cachetools.cached(black_cache)
@@ -275,6 +305,20 @@ def filter_commit(commit, metadata, cat_file_process=None, repo_filter=None):
             change.blob_id = blob.id
 
 
+gitattrs_option = click.option(
+    "--gitattrs", default=None, help="Location of .gitattributes file"
+)
+conda_option = click.option(
+    "--conda", "conda_env", default=None, help="Name of conda environment to run in"
+)
+autoupdate_option = click.option(
+    "--autoupdate",
+    default=True,
+    is_flag=True,
+    help="Whether to update nbcleanse automatically",
+)
+
+
 @click.group()
 def cli():
     pass
@@ -298,35 +342,62 @@ def filter_repo():
     cat_file_process.wait()
 
 
-def _install(gitattrs=None):
+def _install(gitattrs=None, conda_env=None, autoupdate=None):
     """Install the git filter and set the git attributes."""
-    from os import name, path
-    from subprocess import check_call, check_output, CalledProcessError
-
     try:
-        git_dir = check_output(["git", "rev-parse", "--git-dir"]).strip()
+        git_dir = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
     except (WindowsError if name == "nt" else OSError):
         print("Installation failed: git is not on path!", file=sys.stderr)
         sys.exit(1)
     except CalledProcessError:
         print("Installation failed: not a git repository!", file=sys.stderr)
         sys.exit(1)
-    filepath = "'{}' '{}' filter".format(
-        sys.executable.replace("\\", "/"), path.abspath(__file__)
-    )
-    check_call(["git", "config", "filter.nbcleanse.clean", filepath])
-    check_call(["git", "config", "filter.nbcleanse.smudge", "cat"])
-    check_call(["git", "config", "diff.ipynb.textconv", filepath + " -t"])
+    if conda_env:
+        if not os.environ["CONDA_EXE"]:
+            click.secho(
+                "$CONDA_EXE not set, cannot install with --conda set",
+                err=True,
+                bold=True,
+            )
+            sys.exit(1)
+        filter_command = [
+            "'{}'".format(path_to_posix(os.environ["CONDA_EXE"])),
+            "run",
+            "-n",
+            f"'{conda_env}'",
+        ]
+    else:
+        filter_command = ["'{}'".format(path_to_posix(sys.executable))]
+    filter_command.extend(["'{}'".format(Path(__file__).resolve()), "filter"])
+    if gitattrs:
+        filter_command.extend(["--gitattrs", f"'{gitattrs}'"])
+    if conda_env:
+        filter_command.extend(["--conda", f"'{conda_env}'"])
+    if autoupdate:
+        filter_command.extend(["--autoupdate"])
+    filter_command = " ".join(filter_command)
+    commands = [
+        ["git", "config", "filter.nbcleanse.clean", filter_command],
+        ["git", "config", "filter.nbcleanse.smudge", "cat"],
+        ["git", "config", "diff.ipynb.textconv", filter_command + " -t"],
+    ]
+    for command in commands:
+        subprocess.run(command, check=True)
 
     if not gitattrs:
-        gitattrs = path.join(git_dir.decode(), "info", "attributes")
-    gitattrs = path.expanduser(gitattrs)
+        gitattrs = os.path.join(git_dir, "info", "attributes")
+    gitattrs = os.path.expanduser(gitattrs)
 
     # Check if there is already a filter for ipynb files
     filter_exists = False
     diff_exists = False
-    if path.exists(gitattrs):
-        with open(gitattrs, "r") as f:
+    if os.path.exists(gitattrs):
+        with open(gitattrs, "r") as f:  # TODO
             attrs = f.read()
         filter_exists = "*.ipynb filter" in attrs
         diff_exists = "*.ipynb diff" in attrs
@@ -344,42 +415,38 @@ def _install(gitattrs=None):
 
 
 @cli.command()
-@click.option("--gitattrs", default=None, help="Location of .gitattributes file")
-def install(gitattrs):
-    return _install(gitattrs)
+@gitattrs_option
+@conda_option
+@autoupdate_option
+def install(gitattrs, conda_env, autoupdate):
+    return _install(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
 
 
 @cli.command()
 @click.option("--gitattrs", default=None, help="Location of .gitattributes file")
 def uninstall(gitattrs):
     """Uninstall the git filter and unset the git attributes."""
-    from os import devnull, path
-    from subprocess import call, check_output, CalledProcessError, STDOUT, DEVNULL
-
     try:
-        git_dir = check_output(["git", "rev-parse", "--git-dir"]).strip()
+        git_dir = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
     except CalledProcessError:
         print("Installation failed: not a git repository!", file=sys.stderr)
         sys.exit(1)
-    call(
+    commands = [
         ["git", "config", "--unset", "filter.nbcleanse.clean"],
-        stdout=DEVNULL,
-        stderr=STDOUT,
-    )
-    call(
         ["git", "config", "--unset", "filter.nbcleanse.smudge"],
-        stdout=DEVNULL,
-        stderr=STDOUT,
-    )
-    call(
         ["git", "config", "--remove-section", "diff.ipynb"],
-        stdout=DEVNULL,
-        stderr=STDOUT,
-    )
+    ]
+    for command in commands:
+        subprocess.run(command, stdout=DEVNULL, stderr=STDOUT)
     if not gitattrs:
-        gitattrs = path.join(git_dir.decode(), "info", "attributes")
+        gitattrs = os.path.join(git_dir, "info", "attributes")
     # Check if there is a filter for ipynb files
-    if path.exists(gitattrs):
+    if os.path.exists(gitattrs):
         with open(gitattrs, "r+") as f:
             lines = [
                 l
@@ -396,7 +463,6 @@ def status():
     """Checks whether nbcleanse is installed as a git filter in the current
     repository.
     """
-    git_pull_if_needed()
     commands = {
         "clean": ["git", "config", "filter.nbcleanse.clean"],
         "smudge": ["git", "config", "filter.nbcleanse.smudge"],
@@ -467,8 +533,12 @@ def status():
 )
 @click.option("--keep-output", is_flag=True, default=False, help="Do not strip output")
 @click.option("-s", "--strip-key", multiple=True, help="Strip key from notebook JSON")
+@gitattrs_option
+@conda_option
+@autoupdate_option
 @click.argument("files", type=click.File("r", lazy=True), nargs=-1)
-def filter(files, textconv, keep_count, keep_output, strip_key):
+def filter(files, textconv, keep_count, keep_output, strip_key, conda_env, autoupdate):
+    git_pull_if_needed(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
     # https://stackoverflow.com/a/16549381
     if sys.stdin:
         sys.stdin.reconfigure(encoding="utf-8")
