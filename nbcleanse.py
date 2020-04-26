@@ -371,8 +371,14 @@ def _install(gitattrs=None, conda_env=None, autoupdate=None):
             f"'{conda_env}'",
         ]
     else:
-        filter_command = ["'{}'".format(path_to_posix(sys.executable))]
-    filter_command.extend(["'{}'".format(Path(__file__).resolve()), "filter"])
+        filter_command = []
+    filter_command.extend(
+        [
+            "'{}'".format(path_to_posix(sys.executable)),
+            "'{}'".format(Path(__file__).resolve()),
+            "filter",
+        ]
+    )
     if gitattrs:
         filter_command.extend(["--gitattrs", f"'{gitattrs}'"])
     if conda_env:
