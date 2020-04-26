@@ -12,7 +12,9 @@ nbcleanse install/uninstall/status/filter modified from nbstripout (https://gith
 """
 
 import subprocess
+from subprocess import check_output, CalledProcessError
 import sys
+import os
 import re
 from functools import partial
 from textwrap import dedent
@@ -22,13 +24,75 @@ import black
 import docformatter
 import cachetools
 
+PARENT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 blobs_handled = {}
 black_cache = cachetools.LRUCache(maxsize=10_000_000, getsizeof=sys.getsizeof)
 
 
-@click.group()
-def cli():
-    pass
+def is_git_pull_needed():
+    # FROM: https://stackoverflow.com/questions/3258243/check-if-pull-needed-in-git
+    commands = {
+        "local": ["git", "rev-parse", "@{0}"],
+        "remote": ["git", "rev-parse", "@{u}"],
+        "base": ["git", "merge-base", "@{0}", "@{u}"],
+    }
+    revs = {}
+    try:
+        subprocess.run(
+            ["git", "remote", "update"],
+            cwd=PARENT_DIR,
+            text=True,
+            capture_output=True,
+            check=True,
+        )
+        for key, args in commands.items():
+            res = subprocess.run(
+                args, cwd=PARENT_DIR, text=True, capture_output=True, check=True
+            )
+            revs[key] = res.stdout.strip()
+        if revs["local"] == revs["remote"]:
+            # up to date
+            return False
+        elif revs["local"] == revs["base"]:
+            # need to pull
+            return True
+        elif revs["local"] == revs["remote"]:
+            # need to push
+            click.secho(
+                "WARNING: please push nbcleanse commits to remote", err=True, bold=True
+            )
+            return False
+        else:
+            # diverged
+            click.secho(
+                "WARNING: nbcleanse local and remote have diverged, cannot update",
+                err=True,
+                bold=True,
+            )
+            return False
+    except CalledProcessError as e:
+        click.secho("could not check for nbcleanse update", err=True, bold=True)
+        click.secho("please try updating nbcleanse manually", err=True, bold=True)
+
+
+def git_pull_if_needed():
+    if not is_git_pull_needed():
+        return
+    click.secho("nbcleanse update available, running git pull...", err=True, bold=True)
+    # subprocess.run(["git", "pull"], cwd=PARENT_DIR, check=True)
+    click.secho(
+        "updating nbcleanse conda environment (if necessary)...", err=True, bold=True
+    )
+    conda_env_name = "nbcleanse"
+    envyml = os.path.join(PARENT_DIR, "environment.yml")
+    subprocess.run(
+        ["conda", "env", "update", "--prune", "-n", conda_env_name, "-f", envyml],
+        cwd=PARENT_DIR,
+        check=True,
+    )
+    click.secho("reinstalling nbcleanse...", err=True, bold=True)
+    _install()
 
 
 @cachetools.cached(black_cache)
@@ -234,9 +298,7 @@ def filter_repo():
     cat_file_process.wait()
 
 
-@cli.command()
-@click.option("--gitattrs", default=None, help="Location of .gitattributes file")
-def install(gitattrs=None):
+def _install(gitattrs=None):
     """Install the git filter and set the git attributes."""
     from os import name, path
     from subprocess import check_call, check_output, CalledProcessError
@@ -279,6 +341,12 @@ def install(gitattrs=None):
             print("*.ipynb filter=nbcleanse", file=f)
         if not diff_exists:
             print("*.ipynb diff=ipynb", file=f)
+
+
+@cli.command()
+@click.option("--gitattrs", default=None, help="Location of .gitattributes file")
+def install(gitattrs):
+    return _install(gitattrs)
 
 
 @cli.command()
@@ -328,56 +396,59 @@ def status():
     """Checks whether nbcleanse is installed as a git filter in the current
     repository.
     """
-    from os import path
-    from subprocess import check_output, CalledProcessError
-
+    git_pull_if_needed()
+    commands = {
+        "clean": ["git", "config", "filter.nbcleanse.clean"],
+        "smudge": ["git", "config", "filter.nbcleanse.smudge"],
+        "diff": ["git", "config", "diff.ipynb.textconv"],
+        "attributes": ["git", "check-attr", "filter", "--", "*.ipynb"],
+        "diff_attributes": ["git", "check-attr", "diff", "--", "*.ipynb"],
+    }
+    info = {}
     try:
-        git_dir = path.dirname(
-            path.abspath(
-                check_output(["git", "rev-parse", "--git-dir"]).strip().decode()
-            )
+        res = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            text=True,
+            capture_output=True,
+            check=True,
         )
-        clean = (
-            check_output(["git", "config", "filter.nbcleanse.clean"]).decode().strip()
-        )
-        smudge = (
-            check_output(["git", "config", "filter.nbcleanse.smudge"]).decode().strip()
-        )
-        diff = check_output(["git", "config", "diff.ipynb.textconv"]).decode().strip()
-        attributes = (
-            check_output(["git", "check-attr", "filter", "--", "*.ipynb"])
-            .decode()
-            .strip()
-        )
-        diff_attributes = (
-            check_output(["git", "check-attr", "diff", "--", "*.ipynb"])
-            .decode()
-            .strip()
-        )
-        if attributes.endswith("unspecified"):
-            print(f"nbcleanse is not installed in repository {git_dir}")
-            sys.exit(1)
-        print(
-            dedent(
-                f"""\
-            nbcleanse is installed in repository {git_dir}
-
-            Filter:
-                clean={clean}
-                smudge={smudge}
-                diff={diff}
-
-            Attributes:
-            {attributes}
-
-            Diff attributes:
-            {diff_attributes}
-            """
-            )
-        )
-    except CalledProcessError:
-        print(f"nbcleanse is not installed in repository {git_dir}")
+        info["git_dir"] = os.path.dirname(os.path.abspath(res.stdout.strip()))
+    except:
+        print("not in a git repository!", file=sys.stderr)
         sys.exit(1)
+    try:
+        for key, args in commands.items():
+            res = subprocess.run(args, text=True, capture_output=True, check=True)
+            info[key] = res.stdout.strip()
+    except CalledProcessError:
+        if "git_dir" in info:
+            print("nbcleanse is not installed in repository {git_dir}".format(**info))
+        else:
+            print("could not find git repository", file=sys.stderr)
+        sys.exit(1)
+    if info["attributes"].endswith("unspecified"):
+        print("nbcleanse is not installed in repository {git_dir}".format(**info))
+        sys.exit(1)
+    print(
+        dedent(
+            """\
+        nbcleanse is installed in repository {git_dir}
+
+        Filter:
+            clean={clean}
+            smudge={smudge}
+            diff={diff}
+
+        Attributes:
+        {attributes}
+
+        Diff attributes:
+        {diff_attributes}
+        """.format(
+                **info
+            )
+        )
+    )
 
 
 @cli.command()
