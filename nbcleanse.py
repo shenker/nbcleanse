@@ -41,9 +41,9 @@ def path_to_posix(path):
 def is_git_pull_needed():
     # FROM: https://stackoverflow.com/questions/3258243/check-if-pull-needed-in-git
     commands = {
-        "local": ["git", "rev-parse", "@{0}"],
+        "local": ["git", "rev-parse", "@"],
         "remote": ["git", "rev-parse", "@{u}"],
-        "base": ["git", "merge-base", "@{0}", "@{u}"],
+        "base": ["git", "merge-base", "@", "@{u}"],
     }
     revs = {}
     try:
