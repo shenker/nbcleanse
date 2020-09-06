@@ -246,6 +246,17 @@ def strip_jupyter(
         if "metadata" in cell:
             for field in ["collapsed", "scrolled"]:
                 cell.metadata.pop(field, None)
+            if "jupyter" in cell["metadata"]:
+                for field in ["source_hidden", "outputs_hidden"]:
+                    cell.metadata.jupyter.pop(field, None)
+            if "execution" in cell["metadata"]:
+                for field in [
+                    "iopub.execute_input",
+                    "iopub.status.busy",
+                    "shell.execute_reply",
+                    "iopub.status.idle",
+                ]:
+                    cell.metadata.jupyter.pop(field, None)
         for (extra, fields) in keys["cell"].items():
             if extra in cell:
                 for field in fields:
