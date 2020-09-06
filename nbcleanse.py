@@ -249,6 +249,8 @@ def strip_jupyter(
             if "jupyter" in cell["metadata"]:
                 for field in ["source_hidden", "outputs_hidden"]:
                     cell.metadata.jupyter.pop(field, None)
+                if not cell.metadata.jupyter:
+                    cell.metadata.pop("jupyter", None)
             if "execution" in cell["metadata"]:
                 for field in [
                     "iopub.execute_input",
