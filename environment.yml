@@ -6,8 +6,5 @@ dependencies:
   - black
   - cachetools
   - click
+  - docformatter
   - nbformat
-  - pip
-  - pip:
-    - docformatter
-  - pre-commit

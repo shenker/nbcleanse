@@ -115,7 +115,7 @@ def git_pull_if_needed(gitattrs=None, conda_env=None, autoupdate=None):
             )
             envyml = PARENT_DIR / "environment.yml"
             subprocess.run(
-                ["conda", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
+                ["mamba", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
                 cwd=PARENT_DIR,
                 check=True,
             )
@@ -130,16 +130,13 @@ def git_pull_if_needed(gitattrs=None, conda_env=None, autoupdate=None):
 @cachetools.cached(black_cache)
 def blacken(contents, format_docstrings=True):
     try:
+        # these parameters are all the defaults, but we include them here to be explicit
         if format_docstrings:
             new_contents = docformatter.format_code(
                 contents, summary_wrap_length=79, description_wrap_length=72
             )
         new_contents = black.format_file_contents(
-            contents,
-            fast=True,
-            mode=black.FileMode(
-                line_length=88, target_versions={black.TargetVersion.PY38}
-            ),
+            contents, fast=True, mode=black.FileMode(line_length=88)
         )
     except black.NothingChanged:
         return contents
