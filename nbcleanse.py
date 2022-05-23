@@ -540,11 +540,13 @@ def status():
         click.secho("not in a git repository!", err=True, bold=True)
         sys.exit(1)
     not_installed = False
-    try:
-        for key, args in commands.items():
+    for key, args in commands.items():
+        try:
             res = subprocess.run(args, text=True, capture_output=True, check=True)
             info[key] = res.stdout.strip()
-    except CalledProcessError:
+    # except CalledProcessError:
+    #     not_installed = True
+    if not (info["clean"] or info["process"]):
         not_installed = True
     if "attributes" not in info or info["attributes"].endswith("unspecified"):
         not_installed = True
