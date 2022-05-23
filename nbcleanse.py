@@ -25,6 +25,7 @@ import nbformat
 import black
 import docformatter
 import cachetools
+from pktline import start_filter_server
 
 PARENT_DIR = Path(__file__).resolve().parent
 TIMESTAMP_FILE = PARENT_DIR / ".last_updated"
@@ -95,7 +96,9 @@ def is_update_needed():
     return not last_updated or now - last_updated >= UPDATE_INTERVAL
 
 
-def git_pull_if_needed(gitattrs=None, conda_env=None, autoupdate=None):
+def git_pull_if_needed(
+    gitattrs=None, conda_env=None, autoupdate=None, long_running=None
+):
     if not autoupdate:
         return
     if not is_update_needed():
@@ -120,7 +123,12 @@ def git_pull_if_needed(gitattrs=None, conda_env=None, autoupdate=None):
                 check=True,
             )
         click.secho("reinstalling nbcleanse...", err=True, bold=True)
-        _install(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
+        _install(
+            gitattrs=gitattrs,
+            conda_env=conda_env,
+            autoupdate=autoupdate,
+            long_running=long_running,
+        )
     now = time.time()
     with open(TIMESTAMP_FILE, "w") as f:
         f.write(f"{now}\n")
@@ -128,31 +136,31 @@ def git_pull_if_needed(gitattrs=None, conda_env=None, autoupdate=None):
 
 
 @cachetools.cached(black_cache)
-def blacken(contents, format_docstrings=True):
+def blacken(content, format_docstrings=True):
     try:
         # these parameters are all the defaults, but we include them here to be explicit
         if format_docstrings:
-            new_contents = docformatter.format_code(
-                contents, summary_wrap_length=79, description_wrap_length=72
+            new_content = docformatter.format_code(
+                content, summary_wrap_length=79, description_wrap_length=72
             )
-        new_contents = black.format_file_contents(
-            contents, fast=True, mode=black.FileMode(line_length=88)
+        new_content = black.format_file_content(
+            content, fast=True, mode=black.FileMode(line_length=88)
         )
     except black.NothingChanged:
-        return contents
+        return content
     except black.InvalidInput:
         return None
     except:  # once got a blib2to3.pgen2.tokenize.TokenError
         return None
-    return new_contents
+    return new_content
 
 
-def filter_py(contents, filename):
-    new_contents = blacken(contents.decode())
-    if new_contents is None:
+def filter_py(content, filename):
+    new_content = blacken(content.decode())
+    if new_content is None:
         click.echo(f"\nUnable to format {filename}")
         return None
-    return new_contents.encode()
+    return new_content.encode()
 
 
 def pop_recursive(d, key, default=None):
@@ -268,15 +276,15 @@ def strip_jupyter(
     return nb
 
 
-def filter_jupyter(contents, filename):
+def filter_jupyter(content, filename, **kwargs):
     try:
-        nb = nbformat.reads(contents.decode(), nbformat.NO_CONVERT)
+        nb = nbformat.reads(content.decode(), nbformat.NO_CONVERT)
     except:
         click.echo(f"\nUnable to parse notebook {filename}", err=True)
         return None
-    nb = strip_jupyter(nb, filename=filename)
-    new_contents = nbformat.writes(nb) + "\n"
-    return new_contents.encode()
+    nb = strip_jupyter(nb, filename=filename, **kwargs)
+    new_content = nbformat.writes(nb) + "\n"
+    return new_content.encode()
 
 
 filetype_filters = {"py": filter_py, "ipynb": filter_jupyter}
@@ -295,22 +303,22 @@ def filter_commit(commit, metadata, cat_file_process=None, repo_filter=None):
             if change.blob_id is None:
                 assert change.type == b"D"
                 continue
-            # Get the old blob contents
+            # Get the old blob content
             cat_file_process.stdin.write(change.blob_id + b"\n")
             cat_file_process.stdin.flush()
             objhash, objtype, objsize = cat_file_process.stdout.readline().split()
-            contents_plus_newline = cat_file_process.stdout.read(int(objsize) + 1)
+            content_plus_newline = cat_file_process.stdout.read(int(objsize) + 1)
             # Reformat into a new blob
             if extension in filetype_filters.keys():
-                new_contents = filetype_filters[extension](
-                    contents_plus_newline, filename
+                new_content = filetype_filters[extension](
+                    content_plus_newline, filename
                 )
-                if new_contents is None:
+                if new_content is None:
                     continue
             else:
                 continue
             # Insert the new file into the filter's stream, and remove the tempfile
-            blob = fr.Blob(new_contents)
+            blob = fr.Blob(new_content)
             repo_filter.insert(blob)
             # Record our handling of the blob and use it for this change
             blobs_handled[change.blob_id] = blob.id
@@ -327,6 +335,13 @@ autoupdate_option = click.option(
     "--autoupdate/--no-autoupdate",
     default=True,
     help="Whether to update nbcleanse automatically",
+    show_default=True,
+)
+long_running_option = click.option(
+    "--long-running/--no-long-running",
+    default=True,
+    help="Whether to invoke git filter in long-running process mode (faster).",
+    show_default=True,
 )
 
 
@@ -353,7 +368,7 @@ def filter_repo():
     cat_file_process.wait()
 
 
-def _install(gitattrs=None, conda_env=None, autoupdate=None):
+def _install(gitattrs=None, conda_env=None, autoupdate=None, long_running=True):
     """Install the git filter and set the git attributes."""
     try:
         git_dir = subprocess.run(
@@ -397,11 +412,27 @@ def _install(gitattrs=None, conda_env=None, autoupdate=None):
     if autoupdate:
         filter_command.extend(["--autoupdate"])
     filter_command = " ".join(filter_command)
-    commands = [
-        ["git", "config", "filter.nbcleanse.clean", filter_command],
-        ["git", "config", "filter.nbcleanse.smudge", "cat"],
-        ["git", "config", "diff.ipynb.textconv", filter_command + " -t"],
-    ]
+    if long_running:
+        commands = [
+            # TODO: should we clear these first?
+            # ["git", "config", "--unset", "filter.nbcleanse.clean"],
+            # ["git", "config", "--unset", "filter.nbcleanse.smudge"],
+            [
+                "git",
+                "config",
+                "filter.nbcleanse.process",
+                filter_command + " --long-running",
+            ],
+            ["git", "config", "filter.nbcleanse.required", "true"],
+            ["git", "config", "diff.nbcleanse.textconv", filter_command + " -t"],
+        ]
+    else:
+        commands = [
+            ["git", "config", "filter.nbcleanse.clean", filter_command],
+            ["git", "config", "filter.nbcleanse.smudge", "cat"],
+            ["git", "config", "filter.nbcleanse.required", "true"],
+            ["git", "config", "diff.nbcleanse.textconv", filter_command + " -t"],
+        ]
     for command in commands:
         subprocess.run(command, check=True)
 
@@ -427,15 +458,21 @@ def _install(gitattrs=None, conda_env=None, autoupdate=None):
         if not filter_exists:
             print("*.ipynb filter=nbcleanse", file=f)
         if not diff_exists:
-            print("*.ipynb diff=ipynb", file=f)
+            print("*.ipynb diff=nbcleanse", file=f)
 
 
 @cli.command()
 @gitattrs_option
 @conda_option
 @autoupdate_option
-def install(gitattrs, conda_env, autoupdate):
-    return _install(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
+@long_running_option
+def install(gitattrs, conda_env, autoupdate, long_running):
+    return _install(
+        gitattrs=gitattrs,
+        conda_env=conda_env,
+        autoupdate=autoupdate,
+        long_running=long_running,
+    )
 
 
 @cli.command()
@@ -453,9 +490,8 @@ def uninstall(gitattrs):
         click.secho("Installation failed: not a git repository!", err=True, bold=True)
         sys.exit(1)
     commands = [
-        ["git", "config", "--unset", "filter.nbcleanse.clean"],
-        ["git", "config", "--unset", "filter.nbcleanse.smudge"],
-        ["git", "config", "--remove-section", "diff.ipynb"],
+        ["git", "config", "--remove-section", "filter.nbcleanse"],
+        ["git", "config", "--remove-section", "diff.nbcleanse"],
     ]
     for command in commands:
         subprocess.run(command, stdout=DEVNULL, stderr=STDOUT)
@@ -465,9 +501,7 @@ def uninstall(gitattrs):
     if os.path.exists(gitattrs):
         with open(gitattrs, "r+") as f:
             lines = [
-                l
-                for l in f
-                if not (l.startswith("*.ipynb filter") or l.startswith("*.ipynb diff"))
+                l for l in f if not ("filter=nbcleanse" in l or "diff=nbcleanse" in l)
             ]
             f.seek(0)
             f.write("".join(lines))
@@ -482,7 +516,9 @@ def status():
     commands = {
         "clean": ["git", "config", "filter.nbcleanse.clean"],
         "smudge": ["git", "config", "filter.nbcleanse.smudge"],
-        "diff": ["git", "config", "diff.ipynb.textconv"],
+        "process": ["git", "config", "filter.nbcleanse.process"],
+        "required": ["git", "config", "filter.nbcleanse.required"],
+        "diff": ["git", "config", "diff.nbcleanse.textconv"],
         "attributes": ["git", "check-attr", "filter", "--", "*.ipynb"],
         "diff_attributes": ["git", "check-attr", "diff", "--", "*.ipynb"],
     }
@@ -518,6 +554,8 @@ def status():
         Filter:
             clean={clean}
             smudge={smudge}
+            process={process}
+            required={required}
             diff={diff}
 
         Attributes:
@@ -539,23 +577,60 @@ def status():
     is_flag=True,
     default=False,
     help="Print filtered files to stdout",
+    show_default=True,
 )
 @click.option(
     "--keep-count",
     is_flag=True,
     default=False,
     help="Do not strip execution count/prompt number",
+    show_default=True,
 )
-@click.option("--keep-output", is_flag=True, default=False, help="Do not strip output")
+@click.option(
+    "--keep-output",
+    is_flag=True,
+    default=False,
+    help="Do not strip output",
+    show_default=True,
+)
 @click.option("-s", "--strip-key", multiple=True, help="Strip key from notebook JSON")
 @gitattrs_option
 @conda_option
 @autoupdate_option
+@long_running_option
 @click.argument("files", type=click.File("r", lazy=True), nargs=-1)
 def filter(
-    files, textconv, keep_count, keep_output, strip_key, gitattrs, conda_env, autoupdate
+    files,
+    textconv,
+    keep_count,
+    keep_output,
+    strip_key,
+    gitattrs,
+    conda_env,
+    autoupdate,
+    long_running,
 ):
-    git_pull_if_needed(gitattrs=gitattrs, conda_env=conda_env, autoupdate=autoupdate)
+    git_pull_if_needed(
+        gitattrs=gitattrs,
+        conda_env=conda_env,
+        autoupdate=autoupdate,
+        long_running=long_running,
+    )
+    if long_running:
+        # PUT BELOW git_pull_if_needed
+        start_filter_server(
+            sys.stdin,
+            sys.stdout,
+            {
+                "clean": partial(
+                    filter_jupyter,
+                    keep_output=keep_output,
+                    keep_count=keep_count,
+                    extra_keys=strip_key,
+                )
+            },
+        )
+        sys.exit(0)
     # SEE: https://stackoverflow.com/a/16549381
     if sys.stdin:
         sys.stdin.reconfigure(encoding="utf-8")
@@ -574,7 +649,11 @@ def filter(
         try:
             nb = nbformat.read(file, as_version=nbformat.NO_CONVERT)
             nb = strip_jupyter(
-                nb, keep_output, keep_count, extra_keys=strip_key, filename=file.name
+                nb,
+                keep_output=keep_output,
+                keep_count=keep_count,
+                extra_keys=strip_key,
+                filename=file.name,
             )
             if not textconv:
                 out_file.seek(0)
