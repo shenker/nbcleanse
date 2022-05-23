@@ -337,11 +337,16 @@ autoupdate_option = click.option(
     help="Whether to update nbcleanse automatically",
     show_default=True,
 )
-long_running_option = click.option(
-    "--long-running/--no-long-running",
-    default=True,
+long_running_option_arg = "--long-running/--no-long-running"
+long_running_option_kwargs = dict(
     help="Whether to invoke git filter in long-running process mode (faster).",
     show_default=True,
+)
+long_running_option = click.option(
+    long_running_option_arg, default=True, **long_running_option_kwargs
+)
+long_running_option_false_by_default = click.option(
+    long_running_option_arg, default=False, **long_running_option_kwargs
 )
 
 
@@ -541,7 +546,7 @@ def status():
             info[key] = res.stdout.strip()
     except CalledProcessError:
         not_installed = True
-    if info["attributes"].endswith("unspecified"):
+    if "attributes" not in info or info["attributes"].endswith("unspecified"):
         not_installed = True
     if not_installed:
         click.echo("nbcleanse is not installed in repository {git_dir}".format(**info))
@@ -597,7 +602,7 @@ def status():
 @gitattrs_option
 @conda_option
 @autoupdate_option
-@long_running_option
+@long_running_option_false_by_default
 @click.argument("files", type=click.File("r", lazy=True), nargs=-1)
 def filter(
     files,
