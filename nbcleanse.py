@@ -541,11 +541,12 @@ def status():
         sys.exit(1)
     not_installed = False
     for key, args in commands.items():
-        try:
-            res = subprocess.run(args, text=True, capture_output=True, check=True)
-            info[key] = res.stdout.strip()
-    # except CalledProcessError:
-    #     not_installed = True
+        # TODO
+        # try:
+        res = subprocess.run(args, text=True, capture_output=True, check=False)
+        info[key] = res.stdout.strip()
+        # except CalledProcessError:
+        #     not_installed = True
     if not (info["clean"] or info["process"]):
         not_installed = True
     if "attributes" not in info or info["attributes"].endswith("unspecified"):
