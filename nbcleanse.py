@@ -34,6 +34,18 @@ from pktline import start_filter_server
 
 filter_ = filter
 
+DEFAULT_EXTRA_KEYS = [
+    "metadata.signature",
+    "metadata.widgets",
+    "cell.metadata.collapsed",
+    "cell.metadata.ExecuteTime",
+    "cell.metadata.execution",
+    "cell.metadata.heading_collapsed",
+    "cell.metadata.hidden",
+    "cell.metadata.scrolled",
+    "cell.metadata.jupyter.outputs_hidden",
+]
+
 PARENT_DIR = Path(__file__).resolve().parent
 TIMESTAMP_FILE = PARENT_DIR / ".last_updated"
 UPDATE_INTERVAL = 5 * 60  # seconds
@@ -809,16 +821,7 @@ def filter(
     if strip_key:
         extra_keys = strip_key
     else:
-        extra_keys = [
-            "metadata.signature",
-            "metadata.widgets",
-            "cell.metadata.collapsed",
-            "cell.metadata.ExecuteTime",
-            "cell.metadata.execution",
-            "cell.metadata.heading_collapsed",
-            "cell.metadata.hidden",
-            "cell.metadata.scrolled",
-        ]
+        extra_keys = DEFAULT_EXTRA_KEYS
     formatter = Formatter(config)
     if long_running:
         start_filter_server(
