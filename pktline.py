@@ -103,9 +103,12 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
             lines = []
             while line := read_pktline_text(input):
                 lines.append(line)
-            content = "\n".join(lines)
+            content = "".join(lines)
             try:
-                filtered_content = content.encode()
+                filter_func = filters[command]
+                filtered_content = filter_func(content, pathname)
+                if filtered_content is None:
+                    filtered_content = content
             except:
                 print(traceback.format_exc(), file=error_file, flush=True)
                 write_pktline(output, b"status=error")
@@ -113,7 +116,7 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
             else:
                 write_pktline(output, b"status=success")
                 write_pktline(output)
-                for packet in chunk(filtered_content, MAX_PACKET_CONTENT_SIZE):
+                for packet in chunk(filtered_content.encode(), MAX_PACKET_CONTENT_SIZE):
                     write_pktline(output, packet)
                 write_pktline(output)
                 write_pktline(output)

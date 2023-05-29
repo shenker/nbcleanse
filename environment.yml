@@ -6,5 +6,7 @@ dependencies:
   - black
   - cachetools
   - click
-  - docformatter
+  - isort
+  - ipython
   - nbformat
+  - tokenize-rt
