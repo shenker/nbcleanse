@@ -419,12 +419,12 @@ def strip_jupyter(
 
 def filter_jupyter(formatter, content, filename, **kwargs):
     try:
-        nb = nbformat.reads(content + "\n\n", nbformat.NO_CONVERT)
+        nb = nbformat.reads(content, nbformat.NO_CONVERT)
     except:
         click.echo(f"\nUnable to parse notebook {filename}", err=True)
         return None
     nb = strip_jupyter(formatter, nb, filename, **kwargs)
-    new_content = nbformat.writes(nb) + "\n"
+    new_content = nbformat.writes(nb)
     return new_content
 
 
