@@ -21,7 +21,7 @@ from collections import Counter, defaultdict
 from collections.abc import Collection
 from functools import partial
 from pathlib import Path, PurePath
-from subprocess import DEVNULL, STDERR, STDOUT, CalledProcessError
+from subprocess import DEVNULL, STDOUT, CalledProcessError
 from textwrap import dedent
 
 import black
@@ -136,8 +136,8 @@ def git_pull_if_needed(
                 ["git", "pull"],
                 text=True,
                 cwd=PARENT_DIR,
-                stdout=STDERR,
-                stderr=STDERR,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
                 check=True,
             )
         except CalledProcessError as e:
@@ -160,8 +160,8 @@ def git_pull_if_needed(
                 ["mamba", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
                 cwd=PARENT_DIR,
                 text=True,
-                stdout=STDERR,
-                stderr=STDERR,
+                stdout=DEVNULL,
+                stderr=DEVNULL,
                 check=True,
             )
         click.secho("reinstalling nbcleanse...", err=True, bold=True)
