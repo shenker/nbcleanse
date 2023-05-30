@@ -144,6 +144,8 @@ def git_pull_if_needed(
                 ["mamba", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
                 cwd=PARENT_DIR,
                 text=True,
+                stdout=subprocess.STDERR,
+                stderr=subprocess.STDERR,
                 check=True,
             )
         click.secho("reinstalling nbcleanse...", err=True, bold=True)
