@@ -340,7 +340,7 @@ def strip_jupyter(
     filename,
     keep_output=False,
     keep_count=False,
-    keep_id=False,
+    keep_id=True,
     extra_keys=[],
     drop_empty_cells=True,
     drop_tagged_cells=[],
@@ -394,7 +394,7 @@ def strip_jupyter(
         if "execution_count" in cell and not keep_count:
             cell["execution_count"] = None
         # replace the cell id with an incremental value that will be consistent across runs
-        if "id" in cell and not keep_id:
+        if not ("id" in cell and keep_id):
             cell["id"] = str(i)
         for field in keys["cell"]:
             pop_recursive(cell, field)
