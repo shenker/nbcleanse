@@ -126,12 +126,28 @@ def git_pull_if_needed(
         return
     if not is_update_needed():
         return
-    pulled = is_git_pull_needed()
-    if pulled:
+    needs_pull = is_git_pull_needed()
+    if needs_pull:
         click.secho(
             "nbcleanse update available, running git pull...", err=True, bold=True
         )
-        subprocess.run(["git", "pull"], text=True, cwd=PARENT_DIR, check=True)
+        try:
+            subprocess.run(
+                ["git", "pull"],
+                text=True,
+                cwd=PARENT_DIR,
+                stdout=STDERR,
+                stderr=STDERR,
+                check=True,
+            )
+        except CalledProcessError as e:
+            click.secho("could not pull nbcleanse update", err=True, bold=True)
+            click.secho(
+                click.style("please try manually running git pull in ", bold=True)
+                + f"'{PARENT_DIR}'",
+                err=True,
+            )
+            return False
         if conda_env:
             click.echo(
                 click.style("updating nbcleanse conda environment '", bold=True)
@@ -159,7 +175,7 @@ def git_pull_if_needed(
     now = time.time()
     with open(TIMESTAMP_FILE, "w") as f:
         f.write(f"{now}\n")
-    return pulled
+    return needs_pull
 
 
 def load_pyproject_configs(pyproject_file):
