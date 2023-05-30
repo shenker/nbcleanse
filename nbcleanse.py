@@ -21,7 +21,7 @@ from collections import Counter, defaultdict
 from collections.abc import Collection
 from functools import partial
 from pathlib import Path, PurePath
-from subprocess import DEVNULL, STDOUT, CalledProcessError
+from subprocess import DEVNULL, STDERR, STDOUT, CalledProcessError
 from textwrap import dedent
 
 import black
@@ -144,8 +144,8 @@ def git_pull_if_needed(
                 ["mamba", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
                 cwd=PARENT_DIR,
                 text=True,
-                stdout=subprocess.STDERR,
-                stderr=subprocess.STDERR,
+                stdout=STDERR,
+                stderr=STDERR,
                 check=True,
             )
         click.secho("reinstalling nbcleanse...", err=True, bold=True)
@@ -608,10 +608,20 @@ def _install(
         ]
     for command, check in commands:
         if check:
-            subprocess.run(command, check=True)
+            subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=True,
+            )
         else:
             # silence stderr
-            subprocess.run(command, stderr=subprocess.DEVNULL, check=False)
+            subprocess.run(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
     if not gitattrs_file:
         gitattrs_file = os.path.join(git_dir, "info", "attributes")
     gitattrs_file = os.path.expanduser(gitattrs_file)
