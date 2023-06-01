@@ -99,7 +99,12 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
         try:
             command = parse_kv(read_pktline_text(input), "command")
             pathname = parse_kv(read_pktline_text(input), "pathname")
-            read_pktline_flush(input)
+            maybe_blob = read_pktline(input)
+            if maybe_blob is not None:
+                blob = parse_kv(parse_text(maybe_blob), "blob")
+                read_pktline_flush(input)
+            else:
+                blob = None
             lines = []
             while line := read_pktline_text(input):
                 lines.append(line)

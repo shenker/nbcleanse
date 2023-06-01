@@ -911,12 +911,14 @@ def filter(
                     keep_output=keep_output,
                     keep_count=keep_count,
                     extra_keys=extra_keys,
-                )
+                ),
+                "smudge": lambda content, pathname: content,
             },
         )
         if verbose:
-            print(file=sys.stderr)
-            formatter.print_exceptions(file=sys.stderr)
+            if formatter.exceptions:
+                print(file=sys.stderr)
+                formatter.print_exceptions(file=sys.stderr)
         sys.exit(0)
     # SEE: https://stackoverflow.com/a/16549381
     if sys.stdin:
