@@ -13,8 +13,8 @@ nbcleanse install/uninstall/status/filter modified from nbstripout (https://gith
 
 import os
 import re
-import shutil
 import subprocess
+from shutil import which
 import sys
 import time
 import traceback
@@ -117,9 +117,9 @@ def is_update_needed():
 
 
 def mamba_cmd():
-    if bin := shutil.which("micromamba"):
+    if bin := which("micromamba"):
         return bin
-    elif bin := shutil.which("mamba"):
+    elif bin := which("mamba"):
         return bin
     else:
         click.secho(
