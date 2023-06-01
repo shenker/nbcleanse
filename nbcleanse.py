@@ -907,6 +907,7 @@ def filter(
             {
                 "clean": lambda content, meta: filter_jupyter(
                     formatter,
+                    content,
                     meta["pathname"],
                     keep_output=keep_output,
                     keep_count=keep_count,
