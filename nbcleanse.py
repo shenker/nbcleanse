@@ -149,22 +149,56 @@ def git_pull_if_needed(
             )
             return False
         if conda_env:
-            click.echo(
-                click.style("updating nbcleanse conda environment '", bold=True)
-                + conda_env
-                + click.style("' (if necessary)...", bold=True),
-                err=True,
-            )
-            envyml = PARENT_DIR / "environment.yml"
-            subprocess.run(
-                ["mamba", "env", "update", "--prune", "-n", conda_env, "-f", envyml],
-                cwd=PARENT_DIR,
-                text=True,
-                stdout=DEVNULL,
-                stderr=DEVNULL,
-                check=True,
-            )
-        click.secho("reinstalling nbcleanse...", err=True, bold=True)
+            if (Path(os.environ["MAMBA_ROOT_PREFIX"]) / conda_env).exists():
+                click.echo(
+                    click.style("updating nbcleanse conda environment '", bold=True)
+                    + conda_env
+                    + click.style("' (if necessary)...", bold=True),
+                    err=True,
+                )
+                envyml = PARENT_DIR / "environment.yml"
+                subprocess.run(
+                    [
+                        "mamba",
+                        "env",
+                        "update",
+                        "--prune",
+                        "-n",
+                        conda_env,
+                        "-f",
+                        envyml,
+                    ],
+                    cwd=PARENT_DIR,
+                    text=True,
+                    stdout=DEVNULL,
+                    stderr=DEVNULL,
+                    check=True,
+                )
+            else:
+                click.echo(
+                    click.style("creating nbcleanse conda environment '", bold=True)
+                    + conda_env
+                    + click.style("'...", bold=True),
+                    err=True,
+                )
+                envyml = PARENT_DIR / "environment.yml"
+                subprocess.run(
+                    [
+                        "mamba",
+                        "create",
+                        "-n",
+                        conda_env,
+                        "-f",
+                        envyml,
+                        "-y",
+                    ],
+                    cwd=PARENT_DIR,
+                    text=True,
+                    stdout=DEVNULL,
+                    stderr=DEVNULL,
+                    check=True,
+                )
+        click.secho("enabling nbcleanse...", err=True, bold=True)
         _install(
             pyproject_file=pyproject_file,
             gitattrs_file=gitattrs_file,
