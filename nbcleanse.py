@@ -115,6 +115,20 @@ def is_update_needed():
     return not last_updated or now - last_updated >= UPDATE_INTERVAL
 
 
+def mamba_cmd():
+    if bin := shutil.which("micromamba"):
+        return bin
+    elif bin := shutil.which("mamba"):
+        return bin
+    else:
+        click.secho(
+            "could not find micromamba or mamba, not updating conda environment",
+            err=True,
+            bold=True,
+        )
+        return None
+
+
 def git_pull_if_needed(
     pyproject_file=None,
     gitattrs_file=None,
@@ -148,7 +162,7 @@ def git_pull_if_needed(
                 err=True,
             )
             return False
-        if conda_env:
+        if conda_env and (mamba := mamba_cmd()):
             if (Path(os.environ["MAMBA_ROOT_PREFIX"]) / conda_env).exists():
                 click.echo(
                     click.style("updating nbcleanse conda environment '", bold=True)
@@ -159,7 +173,7 @@ def git_pull_if_needed(
                 envyml = PARENT_DIR / "environment.yml"
                 subprocess.run(
                     [
-                        "mamba",
+                        mamba,
                         "env",
                         "update",
                         "--prune",
@@ -184,7 +198,7 @@ def git_pull_if_needed(
                 envyml = PARENT_DIR / "environment.yml"
                 subprocess.run(
                     [
-                        "mamba",
+                        mamba,
                         "create",
                         "-n",
                         conda_env,
