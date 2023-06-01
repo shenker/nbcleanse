@@ -35,17 +35,30 @@ def parse_text(data):
         return None
 
 
-def parse_kv(text, key):
+def parse_kv(text):
     if text is None:
         return None
     idx = text.find("=")
     if idx == -1:
         raise Exception(f"expecting '=' in key-value expression '{text}'")
-    parsed_key = text[:idx]
+    key = text[:idx]
+    value = text[idx + 1 :]
+    return key, value
+
+
+def expect_kv(text, key):
+    parsed_key, value = parse_kv(text)
     if parsed_key != key:
         raise Exception(f"expecting key '{key}', instead got '{parsed_key}'")
-    value = text[idx + 1 :]
     return value
+
+
+def parse_kvs(input):
+    d = {}
+    while (data := read_pktline(input)) is not None:
+        key, value = parse_kv(parse_text(data))
+        d[key] = value
+    return d
 
 
 def read_pktline_text(input):
@@ -91,27 +104,20 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
     write_pktline(output)
     client_capabilities = []
     while data := read_pktline(input):
-        client_capabilities.append(parse_kv(parse_text(data), "capability"))
+        client_capabilities.append(expect_kv(parse_text(data), "capability"))
     for capability in filters.keys():
         write_pktline(output, f"capability={capability}".encode())
     write_pktline(output)
     while True:
         try:
-            command = parse_kv(read_pktline_text(input), "command")
-            pathname = parse_kv(read_pktline_text(input), "pathname")
-            maybe_blob = read_pktline(input)
-            if maybe_blob is not None:
-                blob = parse_kv(parse_text(maybe_blob), "blob")
-                read_pktline_flush(input)
-            else:
-                blob = None
+            meta = parse_kvs(input)
             lines = []
             while line := read_pktline_text(input):
                 lines.append(line)
             content = "".join(lines)
             try:
                 filter_func = filters[command]
-                filtered_content = filter_func(content, pathname)
+                filtered_content = filter_func(content, meta)
                 if filtered_content is None:
                     filtered_content = content
             except:
