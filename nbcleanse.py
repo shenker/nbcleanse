@@ -905,14 +905,14 @@ def filter(
             sys.stdin,
             sys.stdout,
             {
-                "clean": partial(
-                    filter_jupyter,
+                "clean": lambda content, meta: filter_jupyter(
                     formatter,
+                    meta["pathname"],
                     keep_output=keep_output,
                     keep_count=keep_count,
                     extra_keys=extra_keys,
                 ),
-                "smudge": lambda content, pathname: content,
+                "smudge": lambda content, meta: content,
             },
         )
         if verbose:

@@ -116,6 +116,7 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
                 lines.append(line)
             content = "".join(lines)
             try:
+                command = meta["command"]
                 filter_func = filters[command]
                 filtered_content = filter_func(content, meta)
                 if filtered_content is None:
