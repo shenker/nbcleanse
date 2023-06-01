@@ -913,7 +913,14 @@ def filter(
                     keep_count=keep_count,
                     extra_keys=extra_keys,
                 ),
-                "smudge": lambda content, meta: content,
+                "smudge": lambda content, meta: filter_jupyter(
+                    formatter,
+                    content,
+                    meta["pathname"],
+                    keep_output=keep_output,
+                    keep_count=keep_count,
+                    extra_keys=extra_keys,
+                ),
             },
         )
         if verbose:
