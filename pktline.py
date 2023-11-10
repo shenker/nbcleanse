@@ -77,7 +77,7 @@ def read_text(input):
 def read_text_lines(input):
     lines = []
     while line := read_pktline(input):
-        lines.append(line)
+        lines.append(line.rstrip(b"\n"))
     return b"".join(lines).decode()
 
 
