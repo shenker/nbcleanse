@@ -164,14 +164,14 @@ def git_pull_if_needed(
             )
             return False
         if conda_env and (mamba := mamba_cmd()):
-            if (Path(os.environ["MAMBA_ROOT_PREFIX"]) / conda_env).exists():
+            envyml = str(PARENT_DIR / "environment.yml")
+            if (Path(os.environ["MAMBA_ROOT_PREFIX"]) / "envs" / conda_env).exists():
                 click.echo(
                     click.style("updating nbcleanse conda environment '", bold=True)
                     + conda_env
                     + click.style("' (if necessary)...", bold=True),
                     err=True,
                 )
-                envyml = str(PARENT_DIR / "environment.yml")
                 subprocess.run(
                     [
                         mamba,
@@ -196,7 +196,6 @@ def git_pull_if_needed(
                     + click.style("'...", bold=True),
                     err=True,
                 )
-                envyml = PARENT_DIR / "environment.yml"
                 subprocess.run(
                     [
                         mamba,
