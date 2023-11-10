@@ -171,7 +171,7 @@ def git_pull_if_needed(
                     + click.style("' (if necessary)...", bold=True),
                     err=True,
                 )
-                envyml = PARENT_DIR / "environment.yml"
+                envyml = str(PARENT_DIR / "environment.yml")
                 subprocess.run(
                     [
                         mamba,
