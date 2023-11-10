@@ -13,6 +13,8 @@ def read_pktline(input):
     size = int(size_bytes, 16)
     if size == 0:
         return None
+    elif size <= 4:
+        raise Exception(f"got invalid packet size {size}")
     else:
         contents_bytes = input.buffer.read(size - 4)
         if len(contents_bytes) != size - 4:
@@ -22,7 +24,7 @@ def read_pktline(input):
         return contents_bytes
 
 
-def read_pktline_flush(input):
+def read_flush(input):
     data = read_pktline(input)
     if data is not None:
         raise Exception(f"expecting git flush packet, instead got '{data}'")
@@ -61,8 +63,22 @@ def parse_kvs(input):
     return d
 
 
-def read_pktline_text(input):
+def parse_text(data):
+    if data is not None:
+        return data.decode().rstrip("\n")
+    else:
+        return None
+
+
+def read_text(input):
     return parse_text(read_pktline(input))
+
+
+def read_text_lines(input):
+    lines = []
+    while line := read_pktline(input):
+        lines.append(line)
+    return b"".join(lines).decode()
 
 
 def format_pktline(data=None):
@@ -82,23 +98,24 @@ def chunk(s, size):
     return (s[i : i + size] for i in range(0, len(s), size))
 
 
+# SEE: https://github.com/git-lfs/pktline/blob/main/pkt_line.go
 # SEE: https://github.com/git/git/blob/master/contrib/long-running-filter/example.pl
 # SEE: https://git-scm.com/docs/gitattributes
 # SEE: https://git-scm.com/docs/long-running-process-protocol
 # SEE: https://github.com/jelmer/dulwich/blob/master/dulwich/protocol.py
 # SEE: https://benhoyt.com/writings/pygit/
 def start_filter_server(input, output, filters, error_file=sys.stderr):
-    welcome = read_pktline_text(input)
+    welcome = read_text(input)
     if welcome != FILTER_WELCOME:
         raise Exception(
             f"expecting git welcome message '{FILTER_WELCOME}', got '{welcome}'"
         )
-    version_str = read_pktline_text(input)
+    version_str = read_text(input)
     if version_str != FILTER_VERSION_STR:
         raise Exception(
             f"expecting git long-running process protocol version '{FILTER_VERSION_STR}', got '{version_str}'"
         )
-    read_pktline_flush(input)
+    read_flush(input)
     write_pktline(output, b"git-filter-server")
     write_pktline(output, FILTER_VERSION_STR.encode())
     write_pktline(output)
@@ -111,10 +128,7 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
     while True:
         try:
             meta = parse_kvs(input)
-            lines = []
-            while line := read_pktline_text(input):
-                lines.append(line)
-            content = "".join(lines)
+            content = read_text_lines(input)
             try:
                 command = meta["command"]
                 filter_func = filters[command]
