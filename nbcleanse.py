@@ -486,8 +486,10 @@ def filter_jupyter(formatter, content, filename, **kwargs):
     try:
         nb = nbformat.reads(content, nbformat.NO_CONVERT)
     except:
-        click.echo(f"\nUnable to parse notebook {filename}", err=True)
-        return None
+        click.echo(
+            f"\nUnable to parse notebook {filename}, not filtering contents", err=True
+        )
+        return content
     nb = strip_jupyter(formatter, nb, filename, **kwargs)
     new_content = nbformat.writes(nb)
     return new_content
