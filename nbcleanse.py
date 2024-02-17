@@ -176,6 +176,7 @@ def git_pull_if_needed(
                         mamba_cmd,
                         "update",
                         "--prune",
+                        "-y",
                         "-n",
                         conda_env,
                         "-f",
