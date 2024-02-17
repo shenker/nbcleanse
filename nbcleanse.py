@@ -284,29 +284,35 @@ class Formatter:
             )
 
     @cachetools.cached(format_cache)
-    def format(self, content, enable_isort=True, enable_black=True):
+    def format(self, content, extension, enable_isort=True, enable_black=True):
         try:
-            raise ValueError("foobar")
-            if enable_isort:
-                content = isort.api.sort_code_string(content, self.config["isort"])
-            if enable_black:
-                content = black.format_file_contents(content, **self.config["black"])
-        except black.NothingChanged:
-            return content
+            if extension == "py":
+                if enable_isort:
+                    content = isort.api.sort_code_string(content, self.config["isort"])
+                if enable_black:
+                    try:
+                        content = black.format_file_contents(
+                            content, **self.config["black"]
+                        )
+                    except black.NothingChanged:
+                        pass
         except Exception as exc:
             self.exceptions.append(exc)
             return None
         return content
 
     @cachetools.cached(format_cache)
-    def format_cell(self, content, enable_isort=True, enable_black=True):
+    def format_cell(self, content, kernelspec, enable_isort=True, enable_black=True):
         try:
-            if enable_isort:
-                content = isort.api.sort_code_string(content, self.config["isort"])
-            if enable_black:
-                content = black.format_cell(content, **self.config["black"])
-        except black.NothingChanged:
-            return content
+            # ignore julia, other non-python languages
+            if kernelspec and kernelspec.get("language") == "python":
+                if enable_isort:
+                    content = isort.api.sort_code_string(content, self.config["isort"])
+                if enable_black:
+                    try:
+                        content = black.format_cell(content, **self.config["black"])
+                    except black.NothingChanged:
+                        pass
         except Exception as exc:
             self.exceptions.append(exc)
             return None
@@ -330,7 +336,7 @@ class Formatter:
 
 def filter_py(formatter, content, filename):
     content = content
-    new_content = formatter.format(content)
+    new_content = formatter.format(content, Path(filename).suffix[1:])
     if new_content is None:
         click.echo(f"Unable to format {filename}", err=True)
         return None
@@ -466,7 +472,9 @@ def strip_jupyter(
             pop_recursive(cell, field)
         if cell["cell_type"] == "code":
             try:
-                new_source = formatter.format_cell(cell["source"])
+                new_source = formatter.format_cell(
+                    cell["source"], nb.metadata.kernelspec
+                )
             except:
                 new_source = None
             if new_source is not None:
