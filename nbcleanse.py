@@ -116,18 +116,16 @@ def is_update_needed():
     return not last_updated or now - last_updated >= UPDATE_INTERVAL
 
 
-def mamba_cmd():
-    if bin := which("micromamba"):
-        return bin
-    elif bin := which("mamba"):
-        return bin
-    else:
-        click.secho(
-            "could not find micromamba or mamba, not updating conda environment",
-            err=True,
-            bold=True,
-        )
-        return None
+def which_mamba_cmd():
+    for name in ["micromamba", "mamba", "conda"]:
+        if bin := which(name):
+            return bin, name
+    click.secho(
+        "could not find micromamba or mamba, not updating conda environment",
+        err=True,
+        bold=True,
+    )
+    return None, None
 
 
 def git_pull_if_needed(
@@ -163,7 +161,8 @@ def git_pull_if_needed(
                 err=True,
             )
             return False
-        if conda_env and (mamba := mamba_cmd()):
+        mamba_cmd, mamba_cmd_name = which_mamba_cmd()
+        if conda_env and mamba_cmd_name:
             envyml = str(PARENT_DIR / "environment.yml")
             if (Path(os.environ["MAMBA_ROOT_PREFIX"]) / "envs" / conda_env).exists():
                 click.echo(
@@ -172,9 +171,19 @@ def git_pull_if_needed(
                     + click.style("' (if necessary)...", bold=True),
                     err=True,
                 )
-                subprocess.run(
-                    [
-                        mamba,
+                if mamba_cmd_name == "micromamba":
+                    cmd = [
+                        mamba_cmd,
+                        "update",
+                        "--prune",
+                        "-n",
+                        conda_env,
+                        "-f",
+                        envyml,
+                    ]
+                elif mamba_cmd_name == "mamba" or mamba_cmd_name == "conda":
+                    cmd = [
+                        mamba_cmd,
                         "env",
                         "update",
                         "--prune",
@@ -182,7 +191,9 @@ def git_pull_if_needed(
                         conda_env,
                         "-f",
                         envyml,
-                    ],
+                    ]
+                subprocess.run(
+                    cmd,
                     cwd=PARENT_DIR,
                     text=True,
                     stdout=DEVNULL,
