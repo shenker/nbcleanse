@@ -642,13 +642,15 @@ def _install(
     except CalledProcessError:
         click.secho("Installation failed: not a git repository!", err=True, bold=True)
         sys.exit(1)
+    git_dir = Path(git_dir).resolve()
+    repo_dir = git_dir.parent
     filter_command = ["'{}'".format(path_to_posix(sys.executable))]
     nbcleanse_path = Path(__file__).resolve()
-    if nbcleanse_path.is_relative_to(git_dir):
+    if nbcleanse_path.is_relative_to(repo_dir):
         # if nbcleanse is within the git repo, use relative path
         # (so that it still works if git dir is moved/copied,
         # and also so copies don't accidentally use the wrong nbcleanse version)
-        nbcleanse_path = nbcleanse_path.relative_to(git_dir)
+        nbcleanse_path = nbcleanse_path.relative_to(repo_dir)
     filter_command.extend(["'{}'".format(nbcleanse_path), "filter"])
     if pyproject_file:
         filter_command.extend(["--pyproject", f"'{pyproject_file}'"])
