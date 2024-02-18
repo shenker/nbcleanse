@@ -487,7 +487,10 @@ def strip_jupyter(
                 new_source = formatter.format_cell(
                     cell["source"], nb.metadata.kernelspec
                 )
-            except:
+            except Exception as exc:
+                # record exceptions in the format_cell wrapper and the above code block
+                # (Formatter already records black/isort exceptions within format_cell)
+                formatter.exceptions.append(exc)
                 new_source = None
             if new_source is not None:
                 cell["source"] = new_source
