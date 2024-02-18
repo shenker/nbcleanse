@@ -314,10 +314,10 @@ class Formatter:
         return content
 
     @cachetools.cached(format_cache)
-    def format_cell(self, content, kernelspec, enable_isort=True, enable_black=True):
+    def format_cell(self, content, language, enable_isort=True, enable_black=True):
         try:
             # ignore julia, other non-python languages
-            if kernelspec and kernelspec.get("language") == "python":
+            if language == "python":
                 if enable_isort:
                     content = isort.api.sort_code_string(content, self.config["isort"])
                 if enable_black:
@@ -485,7 +485,7 @@ def strip_jupyter(
         if cell["cell_type"] == "code":
             try:
                 new_source = formatter.format_cell(
-                    cell["source"], nb.metadata.kernelspec
+                    cell["source"], nb.metadata.kernelspec.language
                 )
             except Exception as exc:
                 # record exceptions in the format_cell wrapper and the above code block
