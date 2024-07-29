@@ -30,13 +30,6 @@ def read_flush(input):
         raise Exception(f"expecting git flush packet, instead got '{data}'")
 
 
-def parse_text(data):
-    if data is not None:
-        return data.decode().rstrip("\n")
-    else:
-        return None
-
-
 def parse_kv(text):
     if text is None:
         return None
