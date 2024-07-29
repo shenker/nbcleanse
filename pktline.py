@@ -1,7 +1,7 @@
 import sys
 import traceback
 
-MAX_PACKET_CONTENT_SIZE = 65515  # 65516-1 so that we can add a newline
+MAX_PACKET_CONTENT_SIZE = 65516
 FILTER_WELCOME = "git-filter-client"
 FILTER_VERSION_STR = "version=2"
 
@@ -108,14 +108,14 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
             f"expecting git long-running process protocol version '{FILTER_VERSION_STR}', got '{version_str}'"
         )
     read_flush(input)
-    write_pktline(output, b"git-filter-server")
-    write_pktline(output, FILTER_VERSION_STR.encode())
+    write_pktline(output, b"git-filter-server\n")
+    write_pktline(output, b"%b\n" % FILTER_VERSION_STR.encode())
     write_pktline(output)
     client_capabilities = []
     while data := read_pktline(input):
         client_capabilities.append(expect_kv(parse_text(data), "capability"))
     for capability in filters.keys():
-        write_pktline(output, f"capability={capability}".encode())
+        write_pktline(output, f"capability={capability}\n".encode())
     write_pktline(output)
     while True:
         try:
@@ -129,10 +129,10 @@ def start_filter_server(input, output, filters, error_file=sys.stderr):
                     filtered_content = content
             except:
                 print(traceback.format_exc(), file=error_file, flush=True)
-                write_pktline(output, b"status=error")
+                write_pktline(output, b"status=error\n")
                 write_pktline(output)
             else:
-                write_pktline(output, b"status=success")
+                write_pktline(output, b"status=success\n")
                 write_pktline(output)
                 for packet in chunk(filtered_content.encode(), MAX_PACKET_CONTENT_SIZE):
                     write_pktline(output, packet)
