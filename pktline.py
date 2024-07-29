@@ -78,8 +78,7 @@ def format_pktline(data=None):
     if data is None:
         return b"0000"
     else:
-        # add 1 to length for LF
-        return b"%04x%b\n" % (len(data) + 5, data)
+        return b"%04x%b" % (len(data) + 4, data)
 
 
 def write_pktline(output, data=None):
